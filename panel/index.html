@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>HukukApp Admin</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --border:#334155; --text:#e2e8f0; --muted:#94a3b8; --accent:#3b82f6; --ok:#10b981; --warn:#f59e0b; --err:#ef4444; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .wrap { max-width:900px; margin:0 auto; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h2 { font-size:14px; color:var(--muted); margin:24px 0 12px; text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .field { display:flex; flex-direction:column; gap:6px; flex:1; min-width:180px; }
+  label { font-size:12px; color:var(--muted); }
+  input, select { background:#0f172a; border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:8px; font-size:14px; font-family:inherit; }
+  input:focus, select:focus { outline:none; border-color:var(--accent); }
+  button { background:var(--accent); color:white; border:0; padding:10px 18px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
+  button:hover { filter:brightness(1.1); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  button.ghost { background:transparent; border:1px solid var(--border); }
+  button.danger { background:var(--err); }
+  .status { padding:10px 14px; border-radius:8px; font-size:13px; margin-top:12px; }
+  .status.ok { background:rgba(16,185,129,.1); color:var(--ok); border:1px solid rgba(16,185,129,.3); }
+  .status.err { background:rgba(239,68,68,.1); color:var(--err); border:1px solid rgba(239,68,68,.3); }
+  .user-info { background:#0f172a; border:1px solid var(--border); padding:14px; border-radius:8px; margin-top:12px; font-size:13px; }
+  .user-info div { margin:2px 0; }
+  .user-info .k { color:var(--muted); display:inline-block; width:110px; }
+  .audit { max-height:400px; overflow-y:auto; }
+  .audit-item { padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .audit-item:last-child { border-bottom:0; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+  .badge.vip { background:#a855f7; color:white; }
+  .badge.premium { background:#3b82f6; color:white; }
+  .badge.premiumLite { background:#06b6d4; color:white; }
+  .badge.free { background:#64748b; color:white; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+  .me { font-size:13px; color:var(--muted); }
+  #loginView, #adminView { display:none; }
+  #loginView.visible, #adminView.visible { display:block; }
+  .login-box { max-width:360px; margin:80px auto; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="loginView">
+    <div class="card login-box">
+      <h1>HukukApp Admin</h1>
+      <p style="color:var(--muted); font-size:13px;">Google ile giris yapin.</p>
+      <button id="loginBtn" style="margin-top:16px; width:100%;">Google ile Giris</button>
+      <div id="loginStatus" class="status" style="display:none;"></div>
+    </div>
+  </div>
+
+  <div id="adminView">
+    <div class="topbar">
+      <h1>HukukApp Admin</h1>
+      <div>
+        <span id="meEmail" class="me"></span>
+        <button id="logoutBtn" class="ghost" style="margin-left:12px;">Cikis</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Kullanici Bul</h2>
+      <div class="row">
+        <div class="field">
+          <label>Email</label>
+          <input id="emailInput" type="email" placeholder="kullanici@ornek.com">
+        </div>
+        <button id="findBtn">Ara</button>
+      </div>
+      <div id="userInfo" class="user-info" style="display:none;"></div>
+      <div id="findStatus" class="status" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Abonelik Ata</h2>
+      <div class="row">
+        <div class="field">
+          <label>Tip</label>
+          <select id="typeSelect">
+            <option value="vip">VIP</option>
+            <option value="premium">Premium</option>
+            <option value="premiumLite">Premium Lite</option>
+            <option value="free">Free (kaldir)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sure (gun)</label>
+          <input id="daysInput" type="number" value="365" min="1" max="3650">
+        </div>
+        <div class="field" style="flex:2;">
+          <label>Aciklama (opsiyonel)</label>
+          <input id="reasonInput" type="text" placeholder="promosyon / test / vs">
+        </div>
+        <button id="grantBtn">Ata</button>
+      </div>
+      <div id="grantStatus" class="status" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Son Islemler</h2>
+      <button id="refreshAuditBtn" class="ghost" style="margin-bottom:12px;">Yenile</button>
+      <div id="auditList" class="audit"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
+
+const firebaseConfig = {
+  projectId: "hukukapp-30760",
+  appId: "1:371131654905:web:db91c6cbf10c05c209f828",
+  storageBucket: "hukukapp-30760.firebasestorage.app",
+  apiKey: "AIzaSyC5LRLgm3XC2O3cJRwONVoRQzEaSxHtnTs",
+  authDomain: "hukukapp-30760.firebaseapp.com",
+  messagingSenderId: "371131654905",
+  measurementId: "G-H2CBY9T3SH"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const functions = getFunctions(app, "us-central1");
+
+const grantSubscription = httpsCallable(functions, "grantSubscription");
+const findUserByEmail = httpsCallable(functions, "findUserByEmail");
+const listAdminAudit = httpsCallable(functions, "listAdminAudit");
+
+const $ = id => document.getElementById(id);
+const show = (el, cls, msg) => { el.style.display = "block"; el.className = "status " + cls; el.textContent = msg; };
+const hide = el => { el.style.display = "none"; };
+
+let foundUid = null;
+
+$("loginBtn").onclick = async () => {
+  const s = $("loginStatus");
+  try {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    show(s, "err", "Giris hatasi: " + (e.message || e.code));
+  }
+};
+
+$("logoutBtn").onclick = () => signOut(auth);
+
+$("findBtn").onclick = async () => {
+  const email = $("emailInput").value.trim();
+  const s = $("findStatus");
+  const info = $("userInfo");
+  hide(s); hide(info);
+  foundUid = null;
+  if (!email) { show(s, "err", "Email girin"); return; }
+  $("findBtn").disabled = true;
+  try {
+    const res = await findUserByEmail({ email });
+    const d = res.data;
+    foundUid = d.uid;
+    const sub = d.currentSubscription;
+    const subType = sub?.type || "free";
+    const isActive = sub?.isActive ? "Aktif" : "Pasif";
+    const expiry = sub?.expiryTime ? new Date(sub.expiryTime._seconds * 1000).toLocaleString("tr-TR") : "—";
+    info.innerHTML = `
+      <div><span class="k">UID:</span> <code>${d.uid}</code></div>
+      <div><span class="k">Email:</span> ${d.email}</div>
+      <div><span class="k">Ad:</span> ${d.displayName || "—"}</div>
+      <div><span class="k">Abonelik:</span> <span class="badge ${subType}">${subType}</span> (${isActive})</div>
+      <div><span class="k">Bitis:</span> ${expiry}</div>
+    `;
+    info.style.display = "block";
+  } catch (e) {
+    show(s, "err", e.message || e.code);
+  } finally {
+    $("findBtn").disabled = false;
+  }
+};
+
+$("grantBtn").onclick = async () => {
+  const s = $("grantStatus");
+  hide(s);
+  if (!foundUid) { show(s, "err", "Once kullanici ara"); return; }
+  const type = $("typeSelect").value;
+  const days = parseInt($("daysInput").value, 10);
+  const reason = $("reasonInput").value.trim();
+  if (!confirm(`${foundUid}\nkullanicisina ${type} (${days} gun) atanacak. Emin misiniz?`)) return;
+  $("grantBtn").disabled = true;
+  try {
+    const res = await grantSubscription({ targetUid: foundUid, subscriptionType: type, durationDays: days, reason });
+    show(s, "ok", `Basarili. Yeni tip: ${res.data.subscriptionType}${res.data.expiryTime ? ", bitis: " + new Date(res.data.expiryTime).toLocaleString("tr-TR") : ""}`);
+    loadAudit();
+  } catch (e) {
+    show(s, "err", e.message || e.code);
+  } finally {
+    $("grantBtn").disabled = false;
+  }
+};
+
+async function loadAudit() {
+  const list = $("auditList");
+  list.innerHTML = '<div style="color:var(--muted); font-size:13px;">Yukleniyor...</div>';
+  try {
+    const res = await listAdminAudit({});
+    const items = res.data.items || [];
+    if (items.length === 0) {
+      list.innerHTML = '<div style="color:var(--muted); font-size:13px;">Kayit yok.</div>';
+      return;
+    }
+    list.innerHTML = items.map(it => {
+      const when = it.at ? new Date(it.at).toLocaleString("tr-TR") : "—";
+      return `
+        <div class="audit-item">
+          <div><span class="badge ${it.subscriptionType}">${it.subscriptionType}</span> ${it.durationDays ? it.durationDays + " gun" : ""} → <code>${it.targetUid}</code></div>
+          <div style="color:var(--muted); font-size:12px; margin-top:4px;">${when} · ${it.reason || "—"}</div>
+        </div>
+      `;
+    }).join("");
+  } catch (e) {
+    list.innerHTML = `<div class="status err" style="margin-top:0;">${e.message || e.code}</div>`;
+  }
+}
+
+$("refreshAuditBtn").onclick = loadAudit;
+
+onAuthStateChanged(auth, user => {
+  if (user) {
+    $("loginView").classList.remove("visible");
+    $("adminView").classList.add("visible");
+    $("meEmail").textContent = user.email;
+    loadAudit();
+  } else {
+    $("adminView").classList.remove("visible");
+    $("loginView").classList.add("visible");
+  }
+});
+</script>
+</body>
+</html>
