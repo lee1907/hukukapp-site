@@ -32,6 +32,19 @@
   .audit { max-height:400px; overflow-y:auto; }
   .audit-item { padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .audit-item:last-child { border-bottom:0; }
+  .stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .stat { flex:1; min-width:120px; background:#0f172a; border:1px solid var(--border); padding:14px; border-radius:8px; }
+  .stat .num { font-size:22px; font-weight:700; color:var(--text); }
+  .stat .lbl { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
+  table.subs { width:100%; border-collapse:collapse; font-size:13px; }
+  table.subs th { text-align:left; color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.06em; padding:8px 10px; border-bottom:1px solid var(--border); }
+  table.subs td { padding:10px; border-bottom:1px solid var(--border); }
+  table.subs tr:hover td { background:rgba(59,130,246,.05); }
+  table.subs td.email { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  table.subs td .srcbadge { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; background:#334155; color:var(--muted); }
+  .expiry-soon { color:var(--warn); }
+  .expiry-expired { color:var(--err); }
+  .table-wrap { overflow-x:auto; }
   .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
   .badge.vip { background:#a855f7; color:white; }
   .badge.premium { background:#3b82f6; color:white; }
@@ -104,6 +117,45 @@
     </div>
 
     <div class="card">
+      <h2>Aktif Aboneler</h2>
+      <div id="statsBox" class="stats">
+        <div class="stat"><div class="num" id="statTotal">—</div><div class="lbl">Toplam Aktif</div></div>
+        <div class="stat"><div class="num" id="statVip">—</div><div class="lbl">VIP</div></div>
+        <div class="stat"><div class="num" id="statPremium">—</div><div class="lbl">Premium</div></div>
+        <div class="stat"><div class="num" id="statPremiumLite">—</div><div class="lbl">Premium Lite</div></div>
+      </div>
+      <div class="row" style="margin-bottom:12px;">
+        <div class="field" style="max-width:200px;">
+          <label>Filtre</label>
+          <select id="subFilter">
+            <option value="">Tumu</option>
+            <option value="vip">VIP</option>
+            <option value="premium">Premium</option>
+            <option value="premiumLite">Premium Lite</option>
+          </select>
+        </div>
+        <button id="loadSubsBtn">Listele</button>
+        <button id="refreshStatsBtn" class="ghost">Ozeti Yenile</button>
+      </div>
+      <div class="table-wrap">
+        <table class="subs" id="subsTable" style="display:none;">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Tip</th>
+              <th>Bitis</th>
+              <th>Kaynak</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="subsBody"></tbody>
+        </table>
+      </div>
+      <div id="subsStatus" class="status" style="display:none;"></div>
+      <button id="loadMoreBtn" class="ghost" style="margin-top:12px; display:none;">Daha Fazla Yukle</button>
+    </div>
+
+    <div class="card">
       <h2>Son Islemler</h2>
       <button id="refreshAuditBtn" class="ghost" style="margin-bottom:12px;">Yenile</button>
       <div id="auditList" class="audit"></div>
@@ -133,6 +185,8 @@ const functions = getFunctions(app, "us-central1");
 const grantSubscription = httpsCallable(functions, "grantSubscription");
 const findUserByEmail = httpsCallable(functions, "findUserByEmail");
 const listAdminAudit = httpsCallable(functions, "listAdminAudit");
+const listActiveSubscribers = httpsCallable(functions, "listActiveSubscribers");
+const subscriberStats = httpsCallable(functions, "subscriberStats");
 
 const $ = id => document.getElementById(id);
 const show = (el, cls, msg) => { el.style.display = "block"; el.className = "status " + cls; el.textContent = msg; };
@@ -229,12 +283,114 @@ async function loadAudit() {
 
 $("refreshAuditBtn").onclick = loadAudit;
 
+// ─── Aktif Aboneler ───
+
+let subsCursor = null;
+let subsCurrentFilter = "";
+
+async function loadStats() {
+  $("statTotal").textContent = "…";
+  $("statVip").textContent = "…";
+  $("statPremium").textContent = "…";
+  $("statPremiumLite").textContent = "…";
+  try {
+    const res = await subscriberStats({});
+    const d = res.data;
+    $("statTotal").textContent = d.totalActive ?? 0;
+    $("statVip").textContent = d.byType?.vip ?? 0;
+    $("statPremium").textContent = d.byType?.premium ?? 0;
+    $("statPremiumLite").textContent = d.byType?.premiumLite ?? 0;
+  } catch (e) {
+    $("statTotal").textContent = "?";
+    $("statVip").textContent = "?";
+    $("statPremium").textContent = "?";
+    $("statPremiumLite").textContent = "?";
+    console.warn("stats hatasi", e);
+  }
+}
+
+function fmtExpiry(ms) {
+  if (!ms) return { txt: "—", cls: "" };
+  const now = Date.now();
+  const date = new Date(ms).toLocaleDateString("tr-TR");
+  const diff = ms - now;
+  if (diff < 0) return { txt: date + " (sona erdi)", cls: "expiry-expired" };
+  if (diff < 7 * 24 * 60 * 60 * 1000) return { txt: date + " (≤7 gun)", cls: "expiry-soon" };
+  return { txt: date, cls: "" };
+}
+
+function renderSubsRows(items, append = false) {
+  const body = $("subsBody");
+  if (!append) body.innerHTML = "";
+  for (const it of items) {
+    const exp = fmtExpiry(it.expiryTime);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="email" title="${it.email}">${it.email || "<span style='color:var(--muted)'>email yok</span>"}</td>
+      <td><span class="badge ${it.type}">${it.type}</span></td>
+      <td class="${exp.cls}">${exp.txt}</td>
+      <td><span class="srcbadge">${it.source}</span></td>
+      <td><button class="ghost" data-uid="${it.uid}" data-email="${it.email}">Detay</button></td>
+    `;
+    tr.querySelector("button").onclick = (e) => {
+      const email = e.target.getAttribute("data-email");
+      if (email) {
+        $("emailInput").value = email;
+        $("findBtn").click();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    };
+    body.appendChild(tr);
+  }
+}
+
+async function loadSubs(reset = true) {
+  const s = $("subsStatus");
+  hide(s);
+  if (reset) {
+    subsCursor = null;
+    subsCurrentFilter = $("subFilter").value;
+  }
+  $("loadSubsBtn").disabled = true;
+  $("loadMoreBtn").disabled = true;
+  try {
+    const payload = { limit: 50 };
+    if (subsCurrentFilter) payload.type = subsCurrentFilter;
+    if (!reset && subsCursor) payload.cursor = subsCursor;
+
+    const res = await listActiveSubscribers(payload);
+    const d = res.data;
+    const items = d.items || [];
+
+    $("subsTable").style.display = items.length > 0 || !reset ? "table" : "none";
+    renderSubsRows(items, !reset);
+
+    subsCursor = d.nextCursor;
+    $("loadMoreBtn").style.display = subsCursor ? "inline-block" : "none";
+
+    if (reset && items.length === 0) {
+      show(s, "ok", "Aktif abone yok.");
+    }
+  } catch (e) {
+    show(s, "err", e.message || e.code);
+  } finally {
+    $("loadSubsBtn").disabled = false;
+    $("loadMoreBtn").disabled = false;
+  }
+}
+
+$("loadSubsBtn").onclick = () => loadSubs(true);
+$("loadMoreBtn").onclick = () => loadSubs(false);
+$("refreshStatsBtn").onclick = loadStats;
+$("subFilter").onchange = () => loadSubs(true);
+
 onAuthStateChanged(auth, user => {
   if (user) {
     $("loginView").classList.remove("visible");
     $("adminView").classList.add("visible");
     $("meEmail").textContent = user.email;
     loadAudit();
+    loadStats();
   } else {
     $("adminView").classList.remove("visible");
     $("loginView").classList.add("visible");
