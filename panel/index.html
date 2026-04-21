@@ -119,6 +119,7 @@
     <div class="card">
       <h2>Aktif Aboneler</h2>
       <div id="statsBox" class="stats">
+        <div class="stat"><div class="num" id="statRegistered">—</div><div class="lbl">Toplam Kayitli</div></div>
         <div class="stat"><div class="num" id="statTotal">—</div><div class="lbl">Toplam Aktif</div></div>
         <div class="stat"><div class="num" id="statVip">—</div><div class="lbl">VIP</div></div>
         <div class="stat"><div class="num" id="statPremium">—</div><div class="lbl">Premium</div></div>
@@ -156,6 +157,30 @@
     </div>
 
     <div class="card">
+      <h2>Kayitli Kullanicilar</h2>
+      <div class="row" style="margin-bottom:12px;">
+        <button id="loadUsersBtn">Listele</button>
+        <span id="usersCount" style="color:var(--muted); font-size:13px; align-self:center;"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="subs" id="usersTable" style="display:none;">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Kayit</th>
+              <th>Son Giris</th>
+              <th>Abonelik</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+      <div id="usersStatus" class="status" style="display:none;"></div>
+      <button id="loadMoreUsersBtn" class="ghost" style="margin-top:12px; display:none;">Daha Fazla Yukle</button>
+    </div>
+
+    <div class="card">
       <h2>Son Islemler</h2>
       <button id="refreshAuditBtn" class="ghost" style="margin-bottom:12px;">Yenile</button>
       <div id="auditList" class="audit"></div>
@@ -187,6 +212,7 @@ const findUserByEmail = httpsCallable(functions, "findUserByEmail");
 const listAdminAudit = httpsCallable(functions, "listAdminAudit");
 const listActiveSubscribers = httpsCallable(functions, "listActiveSubscribers");
 const subscriberStats = httpsCallable(functions, "subscriberStats");
+const listAllUsers = httpsCallable(functions, "listAllUsers");
 
 const $ = id => document.getElementById(id);
 const show = (el, cls, msg) => { el.style.display = "block"; el.className = "status " + cls; el.textContent = msg; };
@@ -289,22 +315,18 @@ let subsCursor = null;
 let subsCurrentFilter = "";
 
 async function loadStats() {
-  $("statTotal").textContent = "…";
-  $("statVip").textContent = "…";
-  $("statPremium").textContent = "…";
-  $("statPremiumLite").textContent = "…";
+  const ids = ["statRegistered","statTotal","statVip","statPremium","statPremiumLite"];
+  ids.forEach(id => $(id).textContent = "…");
   try {
     const res = await subscriberStats({});
     const d = res.data;
+    $("statRegistered").textContent = d.totalRegistered ?? 0;
     $("statTotal").textContent = d.totalActive ?? 0;
     $("statVip").textContent = d.byType?.vip ?? 0;
     $("statPremium").textContent = d.byType?.premium ?? 0;
     $("statPremiumLite").textContent = d.byType?.premiumLite ?? 0;
   } catch (e) {
-    $("statTotal").textContent = "?";
-    $("statVip").textContent = "?";
-    $("statPremium").textContent = "?";
-    $("statPremiumLite").textContent = "?";
+    ids.forEach(id => $(id).textContent = "?");
     console.warn("stats hatasi", e);
   }
 }
@@ -383,6 +405,96 @@ $("loadSubsBtn").onclick = () => loadSubs(true);
 $("loadMoreBtn").onclick = () => loadSubs(false);
 $("refreshStatsBtn").onclick = loadStats;
 $("subFilter").onchange = () => loadSubs(true);
+
+// ─── Kayitli Kullanicilar ───
+
+let usersCursor = null;
+let usersShownCount = 0;
+
+function fmtDateShort(ms) {
+  if (!ms) return "—";
+  return new Date(ms).toLocaleDateString("tr-TR");
+}
+
+function fmtRelative(ms) {
+  if (!ms) return "—";
+  const diff = Date.now() - ms;
+  const min = Math.floor(diff / 60000);
+  if (min < 60) return min + " dk once";
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return hr + " saat once";
+  const day = Math.floor(hr / 24);
+  if (day < 30) return day + " gun once";
+  return fmtDateShort(ms);
+}
+
+function renderUsersRows(items, append = false) {
+  const body = $("usersBody");
+  if (!append) body.innerHTML = "";
+  for (const u of items) {
+    const subBadge = u.isActive
+      ? `<span class="badge ${u.subscriptionType}">${u.subscriptionType}</span>`
+      : `<span class="badge free">free</span>`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="email" title="${u.email}">${u.email || "<span style='color:var(--muted)'>—</span>"}</td>
+      <td>${fmtDateShort(u.createdAt)}</td>
+      <td>${fmtRelative(u.lastSignIn)}</td>
+      <td>${subBadge}</td>
+      <td><button class="ghost" data-email="${u.email}">Detay</button></td>
+    `;
+    tr.querySelector("button").onclick = (e) => {
+      const email = e.target.getAttribute("data-email");
+      if (email) {
+        $("emailInput").value = email;
+        $("findBtn").click();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    };
+    body.appendChild(tr);
+  }
+}
+
+async function loadUsers(reset = true) {
+  const s = $("usersStatus");
+  hide(s);
+  if (reset) {
+    usersCursor = null;
+    usersShownCount = 0;
+  }
+  $("loadUsersBtn").disabled = true;
+  $("loadMoreUsersBtn").disabled = true;
+  try {
+    const payload = { limit: 100 };
+    if (!reset && usersCursor) payload.cursor = usersCursor;
+
+    const res = await listAllUsers(payload);
+    const d = res.data;
+    const items = d.items || [];
+
+    $("usersTable").style.display = items.length > 0 || !reset ? "table" : "none";
+    renderUsersRows(items, !reset);
+
+    usersShownCount += items.length;
+    usersCursor = d.nextCursor;
+    $("loadMoreUsersBtn").style.display = usersCursor ? "inline-block" : "none";
+    $("usersCount").textContent = usersShownCount > 0
+      ? `${usersShownCount} kullanici goruntulendi`
+      : "";
+
+    if (reset && items.length === 0) {
+      show(s, "ok", "Kayitli kullanici yok.");
+    }
+  } catch (e) {
+    show(s, "err", e.message || e.code);
+  } finally {
+    $("loadUsersBtn").disabled = false;
+    $("loadMoreUsersBtn").disabled = false;
+  }
+}
+
+$("loadUsersBtn").onclick = () => loadUsers(true);
+$("loadMoreUsersBtn").onclick = () => loadUsers(false);
 
 onAuthStateChanged(auth, user => {
   if (user) {
