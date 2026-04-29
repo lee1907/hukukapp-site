@@ -3,17 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HukukApp - Hukuki Evrak Rehberi</title>
+    <title>HukukApp — Yeni adresimize yönlendiriliyorsunuz</title>
+    <meta http-equiv="refresh" content="0; url=https://lee1907.github.io/hukukapp-landing/">
+    <link rel="canonical" href="https://lee1907.github.io/hukukapp-landing/">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; color: #333; text-align: center; }
-        h1 { color: #1a73e8; }
-        p { line-height: 1.6; }
-        a { color: #1a73e8; text-decoration: none; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #1F2937;
+            background: linear-gradient(135deg, #4A3B8F 0%, #2A1F5F 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: white;
+            padding: 48px 32px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            max-width: 480px;
+            margin: 24px;
+            text-align: center;
+        }
+        h1 { color: #4A3B8F; margin: 0 0 16px; font-size: 28px; }
+        p { line-height: 1.6; color: #4B5563; margin: 0 0 12px; }
+        a {
+            display: inline-block;
+            background: #4A3B8F;
+            color: white;
+            padding: 14px 28px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+        a:hover { background: #2A1F5F; }
+        .small { font-size: 13px; color: #9CA3AF; margin-top: 24px; }
     </style>
 </head>
 <body>
-    <h1>HukukApp</h1>
-    <p>Hukuki Evrak Rehberi</p>
-    <p><a href="https://play.google.com/store/apps/details?id=com.hukukapp.app">Google Play'den İndirin</a></p>
+    <div class="card">
+        <h1>Yeni Adresimize Yönlendiriliyorsunuz</h1>
+        <p>HukukApp web sitesi taşındı. Yeni site otomatik olarak yüklenecek.</p>
+        <p>Otomatik yönlendirme çalışmazsa aşağıdaki butona tıklayın:</p>
+        <a href="https://lee1907.github.io/hukukapp-landing/">HukukApp Yeni Site</a>
+        <p class="small">lee1907.github.io/hukukapp-landing/</p>
+    </div>
+    <script>
+        window.location.replace('https://lee1907.github.io/hukukapp-landing/');
+    </script>
 </body>
 </html>
